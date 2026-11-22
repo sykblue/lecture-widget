@@ -1,4 +1,10 @@
-﻿# 강의 요약 위젯 (LectureWidget)
+# 강의 요약 위젯 (LectureWidget)
+
+## ⬇ 다운로드
+- **웹 버전 (설치 없음)**: https://sykblue.github.io/lecture-widget/
+- **데스크톱 앱 (Windows exe · Mac)**: https://github.com/sykblue/lecture-widget/releases/latest
+  - Windows 설치형 `LectureWidget-*-win-x64.exe` / 무설치 `LectureWidget-*-portable.exe`
+  - 처음 실행 때 "PC 보호" 창이 뜨면 **추가 정보 → 실행** (코드 서명 없는 개인 프로젝트)
 
 ## 🌐 웹 버전 (설치 없음) — `index.html`
 파일 하나짜리 웹페이지입니다. **Chrome 또는 Edge (PC, Windows·Mac 모두)** 에서 열면 됩니다.

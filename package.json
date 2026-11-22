@@ -1,6 +1,6 @@
 {
   "name": "lecture-widget",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "ZEP 강의에서 강사님 말씀을 받아 적고 요약해 주는 데스크톱 위젯",
   "main": "src/main.js",
   "author": "aicamp",
