@@ -42,11 +42,7 @@ button, select, input { font:inherit; color:inherit; }
   #app { max-width:none; border-radius:0; box-shadow:none; }
 }
 /* 제목 표시줄 없애기(Window Controls Overlay): 헤더가 제목 표시줄 자리 — 잡고 끌면 창 이동, 오른쪽 위 창 버튼은 피해서 배치 */
-@media (display-mode: window-controls-overlay) {
-  #bar { app-region:drag; -webkit-app-region:drag; min-height:env(titlebar-area-height, 40px);
-    padding-top:8px; padding-right:calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 6px); }
-  #bar button, #bar .state-chip { app-region:no-drag; -webkit-app-region:no-drag; }
-}
+
 
 /* 상단: 상태 칩 + 아이콘 버튼 */
 #bar { flex:none; display:flex; align-items:center; gap:2px; padding:12px 8px 6px 14px; }
@@ -146,6 +142,37 @@ footer { display:flex; align-items:center; gap:6px; padding:6px 12px 14px; flex:
 .actions { display:flex; gap:8px; justify-content:flex-end; margin-top:6px; }
 .text-btn { height:40px; padding:0 16px; border-radius:20px; background:none; color:var(--md-primary); font-weight:600; }
 .filled-btn { height:40px; padding:0 22px; border-radius:20px; background:var(--md-primary); color:var(--md-on-primary); font-weight:600; }
+/* 작은 위젯: 창 폭이 좁으면 글자 · 버튼 · 여백을 함께 줄임 */
+@media (max-width: 400px) {
+  html, body { font-size:13px; }
+  #bar { padding:8px 6px 4px 10px; }
+  .state-chip { height:28px; padding:0 10px 0 8px; gap:6px; }
+  .title { font-size:13px; } .timer { font-size:11px; }
+  .icon { width:34px; height:34px; } .icon .ms { font-size:19px; }
+  .tabs.seg { margin:4px 10px 2px; } .seg button { height:30px; font-size:12px; } .seg button .ms { font-size:16px; }
+  .meter { margin:0 12px; }
+  .pane { padding:6px 10px 8px; }
+  .md > h2 { margin:10px 0 4px; font-size:11px; }
+  .md > h2 + p, .md > h2 + ul, .md > h2 + ol { padding:8px 12px; border-radius:12px; }
+  .line { padding:6px 10px; border-radius:12px; margin-bottom:6px; }
+  .empty { padding:8px 0 4px; }
+  .empty .big { width:44px; height:44px; border-radius:14px; margin-bottom:8px; } .empty .big .ms { font-size:24px; }
+  .empty h4 { font-size:14px; }
+  .steps { margin-top:10px; gap:6px; } .steps li { padding:8px 10px; border-radius:12px; font-size:12px; }
+  .srcs { margin-top:8px; } .src { height:24px; font-size:11px; }
+  .empty .note { font-size:11px; margin-top:8px; }
+  .status { padding:2px 12px; font-size:11px; min-height:18px; }
+  footer { padding:4px 8px 10px; gap:5px; }
+  .fab { height:44px; border-radius:14px; font-size:14px; } .fab .ms { font-size:20px; }
+  .tonal { width:40px; height:44px; border-radius:14px; } .tonal span:not(.ms) { display:none; }
+  .panel { padding:6px 14px 12px; } .panel h3 { font-size:17px; margin-bottom:10px; }
+  .panel input:not([type=checkbox]), .panel select { height:40px; font-size:13px; }
+}
+@media (display-mode: window-controls-overlay) {
+  #bar { app-region:drag; -webkit-app-region:drag; min-height:env(titlebar-area-height, 40px);
+    padding-top:8px; padding-right:calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 6px); }
+  #bar button, #bar .state-chip { app-region:no-drag; -webkit-app-region:no-drag; }
+}
 </style>
 </head>
 <body>
@@ -733,7 +760,7 @@ let pipWin = null;
 async function openPip() {
   if (pipWin) return;
   if (!('documentPictureInPicture' in window)) throw new Error('unsupported');
-  pipWin = await documentPictureInPicture.requestWindow({ width: 380, height: 560 });
+  pipWin = await documentPictureInPicture.requestWindow({ width: 320, height: 460 });
   const style = pipWin.document.createElement('style');
   style.textContent = el.appStyle.textContent;
   pipWin.document.head.appendChild(style);
@@ -792,9 +819,9 @@ if (!navigator.mediaDevices?.getDisplayMedia) status('Chrome 또는 Edge(PC) 최
 // 앱 설치(PWA): 서비스 워커 등록 + 브라우저가 설치 가능하다고 알려 주면 "⬇ 앱 설치" 버튼을 보여 줌
 // 앱(PWA) 창으로 처음 열 때 위젯 크기로 맞춤 (한 번만 — 이후엔 사용자가 바꾼 크기 유지)
 try {
-  if (matchMedia('(display-mode: standalone), (display-mode: window-controls-overlay)').matches && !localStorage.getItem('lw:sized')) {
-    localStorage.setItem('lw:sized', '1');
-    resizeTo(420, 740);
+  if (matchMedia('(display-mode: standalone), (display-mode: window-controls-overlay)').matches && !localStorage.getItem('lw:sized2')) {
+    localStorage.setItem('lw:sized2', '1');
+    resizeTo(340, 580);
   }
 } catch {}
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
