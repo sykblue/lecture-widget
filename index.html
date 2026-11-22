@@ -12,6 +12,8 @@
 :root { --bg:#14161b; --panel:#1c1f26; --line:#2a2e38; --text:#e6e8ee; --muted:#8b91a1; --accent:#6c8cff; --rec:#ff5c5c; }
 * { box-sizing: border-box; }
 [hidden] { display:none !important; }
+.panel label.check { display:flex; align-items:center; gap:6px; margin-top:10px; }
+.panel label.check input { width:auto; margin:0; }
 html, body { margin:0; height:100%; background:var(--bg); color:var(--text);
   font:13px/1.55 "Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif; }
 button, select, input { font:inherit; color:inherit; }
@@ -85,7 +87,7 @@ button.primary.stop { background:var(--rec); border-color:var(--rec); }
         <ol>
           <li>다른 탭에서 ZEP 강의실을 열고 소리가 나오게 둡니다.</li>
           <li><b>▶ 시작</b> → 공유 창에서 <b>Chrome 탭</b> → ZEP 탭 선택 → <b>탭 오디오도 공유</b> 켜고 공유.</li>
-          <li><b>⧉ 띄우기</b>를 누르면 항상 위에 뜨는 작은 창이 돼요.</li>
+          <li>공유하면 <b>항상 위에 뜨는 작은 창</b>으로 자동으로 바뀌어요 (⚙에서 끌 수 있음 · ⧉ 로 되돌리기).</li>
         </ol>
         처음 한 번은 받아쓰기·요약 모델을 내려받느라 시간이 걸려요 (이후엔 브라우저에 저장).
       </div>
@@ -142,6 +144,7 @@ button.primary.stop { background:var(--rec); border-color:var(--rec); }
         <label>받아쓰기 단위(초)<input id="sChunk" type="number" min="10" max="120" /></label>
         <label>자동 요약 간격(분)<input id="sEvery" type="number" min="1" max="30" /></label>
       </div>
+      <label class="check"><input id="sAutoPip" type="checkbox" /> ▶ 시작하면 작은 창으로 자동 띄우기</label>
       <p class="small">소리와 글은 이 브라우저 밖으로 나가지 않아요. 인터넷은 모델을 처음 받을 때만 써요. Chrome 또는 Edge 최신 버전에서 쓰세요.</p>
       <div class="actions">
         <button id="sCancel">닫기</button>
@@ -169,6 +172,7 @@ const DEFAULTS = {
   engine: 'webllm', webllmModel: 'Qwen2.5-3B-Instruct',
   ollamaUrl: 'http://127.0.0.1:11434', ollamaModel: 'qwen2.5:14b',
   whisperModel: 'Xenova/whisper-small', chunkSeconds: 30, summaryMinutes: 3,
+  autoPip: true, // ▶ 시작하면 항상 위 작은 창으로 자동으로 띄우기 (기본 켜짐)
 };
 const S = {
   settings: { ...DEFAULTS, ...store.get('settings', {}) },
@@ -316,13 +320,19 @@ function flushChunk() {
 }
 
 async function start() {
+  // 공유 창과 작은 창은 둘 다 "사용자 클릭"이 있어야 열려요 → 같은 클릭 안에서 공유 창을 먼저, 작은 창을 바로 이어서 연다
+  const asking = navigator.mediaDevices.getDisplayMedia({
+    video: { width: 320, height: 180, frameRate: 1 },
+    audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, suppressLocalAudioPlayback: false },
+    preferCurrentTab: false, selfBrowserSurface: 'exclude', systemAudio: 'include',
+  });
+  const autoPip = S.settings.autoPip !== false && !pipWin ? openPip().then(() => true, () => false) : Promise.resolve(false);
   try {
-    S.stream = await navigator.mediaDevices.getDisplayMedia({
-      video: { width: 320, height: 180, frameRate: 1 },
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, suppressLocalAudioPlayback: false },
-      preferCurrentTab: false, selfBrowserSurface: 'exclude', systemAudio: 'include',
-    });
-  } catch { return status('공유가 취소됐어요. ▶ 시작을 다시 눌러 ZEP 탭을 골라 주세요.', true); }
+    S.stream = await asking;
+  } catch {
+    if (await autoPip) pipWin?.close();
+    return status('공유가 취소됐어요. ▶ 시작을 다시 눌러 ZEP 탭을 골라 주세요.', true);
+  }
   const tracks = S.stream.getAudioTracks();
   if (!tracks.length) {
     S.stream.getTracks().forEach((t) => t.stop());
@@ -461,6 +471,7 @@ async function openSettings() {
   el.sEngine.value = s.engine; el.sWebllm.value = s.webllmModel;
   el.sOllamaUrl.value = s.ollamaUrl; el.sOllamaModel.value = s.ollamaModel;
   el.sWhisper.value = s.whisperModel; el.sChunk.value = s.chunkSeconds; el.sEvery.value = s.summaryMinutes;
+  el.sAutoPip.checked = s.autoPip !== false;
   syncEngineBoxes();
   el.settings.classList.remove('hidden');
   try {
@@ -478,6 +489,7 @@ el.sSave.onclick = () => {
     whisperModel: el.sWhisper.value,
     chunkSeconds: Math.min(120, Math.max(10, +el.sChunk.value || 30)),
     summaryMinutes: Math.min(30, Math.max(1, +el.sEvery.value || 3)),
+    autoPip: el.sAutoPip.checked,
   };
   store.set('settings', S.settings);
   el.settings.classList.add('hidden');
@@ -486,9 +498,9 @@ el.sSave.onclick = () => {
 
 /* ---------- 항상 위 작은 창 (Document Picture-in-Picture) ---------- */
 let pipWin = null;
-el.btnPip.onclick = async () => {
-  if (pipWin) { pipWin.close(); return; }
-  if (!('documentPictureInPicture' in window)) return status('이 브라우저는 작은 창 띄우기를 지원하지 않아요 (Chrome/Edge 116 이상).', true);
+async function openPip() {
+  if (pipWin) return;
+  if (!('documentPictureInPicture' in window)) throw new Error('unsupported');
   pipWin = await documentPictureInPicture.requestWindow({ width: 380, height: 560 });
   const style = pipWin.document.createElement('style');
   style.textContent = el.appStyle.textContent;
@@ -502,6 +514,11 @@ el.btnPip.onclick = async () => {
     el.btnPip.textContent = '⧉ 띄우기';
     pipWin = null;
   });
+}
+el.btnPip.onclick = () => {
+  if (pipWin) { pipWin.close(); return; }
+  if (!('documentPictureInPicture' in window)) return status('이 브라우저는 작은 창 띄우기를 지원하지 않아요 (Chrome/Edge 116 이상).', true);
+  openPip().catch(() => status('작은 창을 띄우지 못했어요. ⧉ 띄우기를 다시 눌러 주세요.', true));
 };
 
 /* ---------- 버튼 ---------- */
