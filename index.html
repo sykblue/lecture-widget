@@ -165,7 +165,7 @@ footer { display:flex; align-items:center; gap:6px; padding:6px 12px 14px; flex:
         <ol class="steps">
           <li><span class="n">1</span><span>다른 탭에서 <b>ZEP 강의실</b>이나 <b>YouTube 영상</b>을 열고 소리가 나오게 둬요.</span></li>
           <li><span class="n">2</span><span><b>시작</b> → 공유 창 <b>탭</b>에서 그 탭 선택 → <b>탭 오디오도 공유</b> 켜기.</span></li>
-          <li><span class="n">3</span><span>공유하면 <b>항상 위 작은 창</b>으로 자동으로 바뀌어요.</span></li>
+          <li><span class="n">3</span><span>공유한 뒤 위젯을 <b>한 번 누르면</b> 항상 위 작은 창으로 바뀌어요.</span></li>
         </ol>
         <div class="srcs"><span class="src"><span class="ms">groups</span>ZEP</span><span class="src"><span class="ms">smart_display</span>YouTube</span><span class="src"><span class="ms">tab</span>아무 탭</span><span class="src"><span class="ms">desktop_windows</span>다른 앱</span></div>
         <div class="note">다른 브라우저나 앱(ZEP 앱 등)의 소리는 공유 창에서 <b>전체 화면</b> → <b>시스템 오디오 공유</b>를 켜세요.<br>처음 한 번은 모델을 내려받느라 시간이 걸려요 (이후엔 저장됨)</div>
@@ -225,7 +225,7 @@ footer { display:flex; align-items:center; gap:6px; padding:6px 12px 14px; flex:
         <label>받아쓰기 단위(초)<input id="sChunk" type="number" min="10" max="120" /></label>
         <label>자동 요약 간격(분)<input id="sEvery" type="number" min="1" max="30" /></label>
       </div>
-      <label class="check">시작하면 작은 창으로 자동 띄우기<input id="sAutoPip" type="checkbox" /></label>
+      <label class="check">공유 후 한 번 누르면 작은 창으로 띄우기<input id="sAutoPip" type="checkbox" /></label>
       <div class="diag">
         <b>진단</b> — 이상한 글이 나오면 여기를 확인하세요
         <div class="dg" id="diagInfo"></div>
@@ -470,12 +470,17 @@ async function start() {
     preferCurrentTab: false, selfBrowserSurface: 'exclude', systemAudio: 'include',
     surfaceSwitching: 'include', monitorTypeSurfaces: 'include',
   });
-  const autoPip = S.settings.autoPip !== false && !pipWin ? openPip().then(() => true, () => false) : Promise.resolve(false);
+  // 작은 창을 공유 창과 동시에 열면 공유 창이 초점을 잃고 저절로 취소됨 → 공유가 끝난 뒤, 위젯을 한 번 누르면 작은 창으로
+  const autoPip = Promise.resolve(false);
   try {
     S.stream = await asking;
   } catch {
-    if (await autoPip) pipWin?.close();
     return status('공유가 취소됐어요. 시작을 다시 눌러 ZEP · YouTube 탭을 골라 주세요.', true);
+  }
+  if (S.settings.autoPip !== false && !pipWin && 'documentPictureInPicture' in window) {
+    setTimeout(() => status('위젯을 아무 곳이나 한 번 누르면 항상 위 작은 창으로 바뀌어요'), 1500);
+    const once = (e) => { if (e.target.closest?.('#btnStart, #btnSettings, #settings')) return; document.removeEventListener('pointerdown', once, true); if (S.running && !pipWin) openPip().catch(() => {}); };
+    document.addEventListener('pointerdown', once, true);
   }
   const tracks = S.stream.getAudioTracks();
   const surface = S.stream.getVideoTracks()[0]?.getSettings().displaySurface || '';
