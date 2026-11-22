@@ -39,6 +39,12 @@ button, select, input { font:inherit; color:inherit; }
 
 /* 상단: 상태 칩 + 아이콘 버튼 */
 #bar { flex:none; display:flex; align-items:center; gap:2px; padding:12px 8px 6px 14px; }
+.meter { height:3px; margin:0 16px; border-radius:2px; background:var(--md-surface-c-high); overflow:hidden; flex:none; }
+.meter i { display:block; height:100%; width:0; background:var(--md-primary); border-radius:2px; transition:width .1s linear; }
+.diag { background:var(--md-surface-c); border-radius:16px; padding:12px 14px; margin:4px 0 12px; font-size:12px; color:var(--md-on-surface-variant); }
+.diag b { color:var(--md-on-surface); font-weight:600; }
+.diag .dg { display:grid; grid-template-columns:auto 1fr; gap:2px 10px; margin:6px 0 10px; }
+.tonal-btn { height:36px; padding:0 14px; border-radius:18px; background:var(--md-secondary-container); color:var(--md-on-secondary-container); font-weight:600; font-size:13px; }
 .state-chip { display:flex; align-items:center; gap:8px; height:32px; padding:0 12px 0 10px; border-radius:16px; background:var(--md-surface-c-high); min-width:0; }
 .title { font-weight:600; font-size:14px; letter-spacing:.1px; white-space:nowrap; }
 .timer { color:var(--md-on-surface-variant); font-variant-numeric:tabular-nums; font-size:12px; }
@@ -144,6 +150,7 @@ footer { display:flex; align-items:center; gap:6px; padding:6px 12px 14px; flex:
     <button id="btnPip" class="icon" title="항상 위에 뜨는 작은 창으로 띄우기"><span class="ms">picture_in_picture_alt</span></button>
     <button id="btnSettings" class="icon" title="설정"><span class="ms">settings</span></button>
   </header>
+  <div class="meter" title="받고 있는 소리 크기"><i id="meterBar"></i></div>
 
   <nav class="tabs seg">
     <button class="tab active" data-tab="summary"><span class="ms chk">check</span><span class="ms ico">summarize</span>요약</button>
@@ -219,6 +226,11 @@ footer { display:flex; align-items:center; gap:6px; padding:6px 12px 14px; flex:
         <label>자동 요약 간격(분)<input id="sEvery" type="number" min="1" max="30" /></label>
       </div>
       <label class="check">시작하면 작은 창으로 자동 띄우기<input id="sAutoPip" type="checkbox" /></label>
+      <div class="diag">
+        <b>진단</b> — 이상한 글이 나오면 여기를 확인하세요
+        <div class="dg" id="diagInfo"></div>
+        <button id="btnHear" class="btn tonal-btn"><span class="ms">play_circle</span>마지막 조각 들어보기</button>
+      </div>
       <p class="small">소리와 글은 이 브라우저 밖으로 나가지 않아요. 인터넷은 모델을 처음 받을 때만 써요.</p>
       <div class="actions">
         <button id="sCancel" class="btn text-btn">닫기</button>
@@ -433,8 +445,10 @@ function flushChunk() {
   S.pcm = []; S.pcmLen = 0;
   const t = S.chunkAt || now(); S.chunkAt = now();
   const audio = downsample(raw, S.inRate);
+  S.lastChunk = audio;
   let sum = 0; for (let i = 0; i < audio.length; i += 4) sum += audio[i] * audio[i];
-  if (Math.sqrt(sum / (audio.length / 4)) < 0.005 || audio.length < SAMPLE_RATE * 2) return; // 무음은 건너뜀
+  S.lastRms = Math.sqrt(sum / (audio.length / 4));
+  if (S.lastRms < 0.005 || audio.length < SAMPLE_RATE * 2) return; // 무음은 건너뜀
   S.sttQueue = S.sttQueue.then(async () => {
     try {
       const t0 = performance.now();
@@ -484,6 +498,15 @@ async function start() {
   const mute = S.ctx.createGain(); mute.gain.value = 0;
   src.connect(proc); proc.connect(mute); mute.connect(S.ctx.destination);
   S.proc = proc;
+  const an = S.ctx.createAnalyser(); an.fftSize = 1024; src.connect(an);
+  const buf = new Float32Array(an.fftSize);
+  S.timers.push(setInterval(() => {
+    an.getFloatTimeDomainData(buf);
+    let sum = 0; for (const v of buf) sum += v * v;
+    const rms = Math.sqrt(sum / buf.length);
+    S.peakRms = Math.max(S.peakRms || 0, rms);
+    el.meterBar.style.width = Math.min(100, Math.round(rms * 400)) + '%';
+  }, 120));
 
   S.running = true; S.startedAt = Date.now(); S.chunkAt = now();
   setBtn(el.btnStart, 'stop_circle', '정지'); el.btnStart.classList.add('stop'); setDot();
@@ -499,6 +522,7 @@ async function stop() {
   S.timers.forEach(clearInterval); S.timers = [];
   flushChunk();
   S.proc?.disconnect(); S.stream?.getTracks().forEach((t) => t.stop()); S.ctx?.close();
+  el.meterBar.style.width = '0';
   setBtn(el.btnStart, 'mic', '시작'); el.btnStart.classList.remove('stop'); setDot();
   status('정지됨 · 마지막 내용 정리 중…');
   await S.sttQueue; await summarize(false);
@@ -612,7 +636,26 @@ function syncEngineBoxes() {
   el.webllmBox.classList.toggle('hidden', el.sEngine.value !== 'webllm');
   el.ollamaBox.classList.toggle('hidden', el.sEngine.value !== 'ollama');
 }
+function showDiag() {
+  const tr = S.stream?.getAudioTracks()[0], vs = S.stream?.getVideoTracks()[0]?.getSettings() || {};
+  const rows = [
+    ['받아쓰기', sttDevice || '(아직 시작 안 함)'],
+    ['CPU 여러 개', self.crossOriginIsolated ? '켜짐' : '꺼짐 (창을 닫았다 다시 열어 보세요)'],
+    ['듣는 곳', S.running ? `${vs.displaySurface === 'browser' ? '탭' : vs.displaySurface === 'monitor' ? '화면 전체' : vs.displaySurface || '?'} · ${tr ? tr.label || '소리 있음' : '소리 없음'}` : '-'],
+    ['입력', S.inRate ? `${S.inRate}Hz` : '-'],
+    ['마지막 조각', S.lastChunk ? `${(S.lastChunk.length / SAMPLE_RATE).toFixed(1)}초 · 크기 ${(S.lastRms || 0).toFixed(3)} ${S.lastRms < 0.005 ? '(무음이라 건너뜀)' : ''}` : '-'],
+  ];
+  el.diagInfo.innerHTML = rows.map(([k, v]) => `<span>${k}</span><b>${esc(String(v))}</b>`).join('');
+}
+el.btnHear.onclick = async () => {
+  if (!S.lastChunk) return status('아직 받은 소리가 없어요. 시작한 뒤 30초쯤 기다려 주세요.', true);
+  const ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
+  const b = ctx.createBuffer(1, S.lastChunk.length, SAMPLE_RATE); b.copyToChannel(S.lastChunk, 0);
+  const n = ctx.createBufferSource(); n.buffer = b; n.connect(ctx.destination); n.onended = () => ctx.close(); n.start();
+  status('위젯이 받아쓰기에 넘긴 마지막 소리를 재생 중이에요. 말소리가 또렷이 들려야 정상이에요.');
+};
 async function openSettings() {
+  showDiag();
   const s = S.settings;
   el.sEngine.value = s.engine; el.sWebllm.value = s.webllmModel;
   el.sOllamaUrl.value = s.ollamaUrl; el.sOllamaModel.value = s.ollamaModel;
