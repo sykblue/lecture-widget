@@ -36,6 +36,17 @@ button, select, input { font:inherit; color:inherit; }
 #app { position:relative; height:100%; max-width:460px; margin:0 auto; display:flex; flex-direction:column; overflow:hidden;
   background:var(--md-surface); border-radius:var(--radius-xl); box-shadow:0 1px 3px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35); }
 .pip #app { max-width:none; border-radius:0; box-shadow:none; }
+/* 앱(PWA)으로 열면: 창 전체가 위젯 한 장 — 바깥 여백 · 둥근 테두리 없음 */
+@media (display-mode: standalone), (display-mode: window-controls-overlay) {
+  body { padding:0; }
+  #app { max-width:none; border-radius:0; box-shadow:none; }
+}
+/* 제목 표시줄 없애기(Window Controls Overlay): 헤더가 제목 표시줄 자리 — 잡고 끌면 창 이동, 오른쪽 위 창 버튼은 피해서 배치 */
+@media (display-mode: window-controls-overlay) {
+  #bar { app-region:drag; -webkit-app-region:drag; min-height:env(titlebar-area-height, 40px);
+    padding-top:8px; padding-right:calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + 6px); }
+  #bar button, #bar .state-chip { app-region:no-drag; -webkit-app-region:no-drag; }
+}
 
 /* 상단: 상태 칩 + 아이콘 버튼 */
 #bar { flex:none; display:flex; align-items:center; gap:2px; padding:12px 8px 6px 14px; }
@@ -779,6 +790,13 @@ if (!navigator.mediaDevices?.getDisplayMedia) status('Chrome 또는 Edge(PC) 최
 </script>
 <script>
 // 앱 설치(PWA): 서비스 워커 등록 + 브라우저가 설치 가능하다고 알려 주면 "⬇ 앱 설치" 버튼을 보여 줌
+// 앱(PWA) 창으로 처음 열 때 위젯 크기로 맞춤 (한 번만 — 이후엔 사용자가 바꾼 크기 유지)
+try {
+  if (matchMedia('(display-mode: standalone), (display-mode: window-controls-overlay)').matches && !localStorage.getItem('lw:sized')) {
+    localStorage.setItem('lw:sized', '1');
+    resizeTo(420, 740);
+  }
+} catch {}
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register('sw.js').then(() => navigator.serviceWorker.ready).then(() => {
     // 서비스 워커가 붙인 격리 헤더를 받으려면 한 번 새로고침이 필요 (한 번만)
