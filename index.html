@@ -300,6 +300,14 @@ async function asrCore(post, libUrl) {
   env.allowLocalModels = false;
   let asr = null, loaded = '';
   const BAD = [/시청해\s*주셔서\s*감사/, /구독과\s*좋아요/, /MBC\s*뉴스/, /다음\s*영상에서/, /자막\s*(제공|by)/i, /^\s*(감사합니다|네|아)\.?\s*$/];
+  // 반복 환각 정리: 1~6어절 구절이 3번 이상 이어지면 1번만 남기고, 남은 글이 거의 같은 말뿐이면 버린다
+  function squashRepeats(t) {
+    let prev;
+    do { prev = t; t = t.replace(/((?:\S+\s+){0,5}?\S+)(?:[\s,.]+\1){2,}/g, '$1'); } while (t !== prev);
+    const words = t.split(/\s+/).filter(Boolean);
+    if (words.length >= 6 && new Set(words).size / words.length < 0.35) return '';
+    return t.trim();
+  }
   async function load(model) {
     if (asr && loaded === model) return;
     const progress = (p) => { if (p.status === 'progress' && p.total) post({ type: 'loading', pct: Math.round(p.loaded / p.total * 100) }); };
@@ -310,7 +318,7 @@ async function asrCore(post, libUrl) {
     let pick = model === 'auto' ? (adapter ? (f16 ? 'onnx-community/whisper-large-v3-turbo' : 'Xenova/whisper-small') : 'Xenova/whisper-base') : model;
     try {
       if (!adapter) throw 0;
-      const dtype = f16 ? { encoder_model: 'fp16', decoder_model_merged: 'q4f16' } : { encoder_model: 'fp32', decoder_model_merged: 'q4' };
+      const dtype = f16 ? { encoder_model: 'fp16', decoder_model_merged: 'fp16' } : { encoder_model: 'fp32', decoder_model_merged: 'q4' };
       asr = await pipeline('automatic-speech-recognition', pick, { device: 'webgpu', dtype, progress_callback: progress });
       device = 'GPU';
     } catch {
@@ -325,8 +333,10 @@ async function asrCore(post, libUrl) {
     try {
       await load(data.model);
       if (data.type !== 'transcribe') return;
-      const out = await asr(data.audio, { language: 'korean', task: 'transcribe', chunk_length_s: 30, stride_length_s: 5 });
+      // no_repeat_ngram_size: 같은 토큰 5개 묶음이 다시 나오지 못하게 → "이곳은 이곳은 이곳은…" 같은 반복 환각을 생성 단계에서 막음
+      const out = await asr(data.audio, { language: 'korean', task: 'transcribe', chunk_length_s: 30, stride_length_s: 5, no_repeat_ngram_size: 5 });
       let text = (Array.isArray(out) ? out.map((o) => o.text).join(' ') : out.text || '').trim();
+      text = squashRepeats(text);
       if (BAD.some((re) => re.test(text))) text = '';
       post({ type: 'result', id: data.id, text });
     } catch (e) { post({ type: 'error', id: data.id, message: String((e && e.message) || e) }); }
