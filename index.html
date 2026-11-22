@@ -302,7 +302,10 @@ const now = () => new Date().toTimeString().slice(0, 5);
 async function asrCore(post, libUrl) {
   const { pipeline, env } = await import(libUrl);
   env.allowLocalModels = false;
-  let asr = null, loaded = '', onGpu = false, gpuLost = 0;
+  // CPU 받아쓰기는 여러 코어를 같이 쓴다 (교차 출처 격리가 켜져 있을 때만 가능 — sw.js 가 헤더를 붙여 줌)
+  const threads = self.crossOriginIsolated ? Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 2)) : 1;
+  try { env.backends.onnx.wasm.numThreads = threads; } catch {}
+  let asr = null, loaded = '', onGpu = false, gpuLost = 0, lastText = '';
   const BAD = [/시청해\s*주셔서\s*감사/, /구독과\s*좋아요/, /MBC\s*뉴스/, /다음\s*영상에서/, /자막\s*(제공|by)/i, /^\s*(감사합니다|네|아|아멘|음|어)[\s.,!]*$/, /^[\s.,!]*(아멘[\s.,!]*)+$/];
   // 반복 환각 정리: 1~6어절 구절이 3번 이상 이어지면 1번만 남기고, 남은 글이 거의 같은 말뿐이면 버린다
   function squashRepeats(t) {
@@ -322,18 +325,20 @@ async function asrCore(post, libUrl) {
     const vendor = String((adapter && adapter.info && adapter.info.vendor) || '').toLowerCase();
     const strong = !!adapter && f16 && /nvidia|amd|apple/.test(vendor);
     // 자동: GPU(fp16 가능)면 large-v3-turbo — 디코더가 얇아 GPU에서 small보다 5배 빠르고 더 정확 (40초 음성 4.5초 vs 25초, RTX 4070 실측)
-    let pick = model === 'auto' ? (strong ? 'onnx-community/whisper-large-v3-turbo' : adapter ? 'Xenova/whisper-small' : 'Xenova/whisper-base') : model;
+    // 자동: 외장 GPU → large-v3-turbo(GPU) / 그 밖 → small(CPU, 여러 코어). 내장 그래픽 WebGPU는 쓰지 않는다
+    let pick = model === 'auto' ? (strong ? 'onnx-community/whisper-large-v3-turbo' : 'Xenova/whisper-small') : model;
+    const useGpu = strong || (model !== 'auto' && !!adapter && gpuLost < 2 && !/intel/.test(vendor));
     try {
-      if (!adapter) throw 0;
+      if (!useGpu) throw 0;
       const dtype = strong ? { encoder_model: 'fp16', decoder_model_merged: 'fp16' } : { encoder_model: 'fp32', decoder_model_merged: 'q4' };
       asr = await pipeline('automatic-speech-recognition', pick, { device: 'webgpu', dtype, progress_callback: progress });
       device = 'GPU';
     } catch {
-      if (pick.includes('large-v3-turbo')) pick = 'Xenova/whisper-base'; // CPU에서 turbo는 너무 느림
+      if (pick.includes('large-v3-turbo')) pick = 'Xenova/whisper-small'; // CPU에서 turbo는 너무 느림
       asr = await pipeline('automatic-speech-recognition', pick, { device: 'wasm', dtype: 'q8', progress_callback: progress });
     }
     onGpu = device === 'GPU';
-    device += ' · ' + (pick.split('/')[1] || pick).replace('whisper-', '') + (adapter && device === 'GPU' ? ' · ' + (vendor || 'gpu') : '');
+    device += ' · ' + (pick.split('/')[1] || pick).replace('whisper-', '') + (device === 'GPU' ? ' · ' + (vendor || 'gpu') : ' · ' + threads + '코어');
     loaded = model;
     post({ type: 'ready', device });
   }
@@ -356,8 +361,17 @@ async function asrCore(post, libUrl) {
         await load(data.model);
         out = await run(data.audio);
       }
-      let text = (Array.isArray(out) ? out.map((o) => o.text).join(' ') : out.text || '').trim();
-      text = squashRepeats(text);
+      let text = squashRepeats((Array.isArray(out) ? out.map((o) => o.text).join(' ') : out.text || '').trim());
+      if (text && text === lastText) {
+        if (onGpu) {
+          gpuLost = 2; asr = null; loaded = '';
+          post({ type: 'notice', message: 'GPU 받아쓰기 결과가 이상해 CPU로 바꾸는 중…' });
+          await load(data.model);
+          text = squashRepeats(((await run(data.audio)).text || '').trim());
+        }
+        if (text === lastText) text = '';
+      }
+      if (text) lastText = text;
       if (BAD.some((re) => re.test(text))) text = '';
       post({ type: 'result', id: data.id, text });
     } catch (e) { post({ type: 'error', id: data.id, message: String((e && e.message) || e) }); }
@@ -691,7 +705,14 @@ if (!navigator.mediaDevices?.getDisplayMedia) status('Chrome 또는 Edge(PC) 최
 <script>
 // 앱 설치(PWA): 서비스 워커 등록 + 브라우저가 설치 가능하다고 알려 주면 "⬇ 앱 설치" 버튼을 보여 줌
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js').catch(() => {});
+  navigator.serviceWorker.register('sw.js').then(() => navigator.serviceWorker.ready).then(() => {
+    // 서비스 워커가 붙인 격리 헤더를 받으려면 한 번 새로고침이 필요 (한 번만)
+    if (!self.crossOriginIsolated && !sessionStorage.getItem('lw:coi-reload')) {
+      sessionStorage.setItem('lw:coi-reload', '1');
+      if (navigator.serviceWorker.controller) location.reload();
+      else navigator.serviceWorker.addEventListener('controllerchange', () => location.reload(), { once: true });
+    }
+  }).catch(() => {});
 }
 (() => {
   const btn = document.getElementById('btnInstall');
