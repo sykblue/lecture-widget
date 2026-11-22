@@ -4,9 +4,14 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>강의 요약 위젯</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="theme-color" content="#1c1f26" />
+<link rel="icon" type="image/png" sizes="192x192" href="pwa/icon-192.png" />
+<link rel="apple-touch-icon" href="pwa/apple-touch-icon.png" />
 <style id="appStyle">
 :root { --bg:#14161b; --panel:#1c1f26; --line:#2a2e38; --text:#e6e8ee; --muted:#8b91a1; --accent:#6c8cff; --rec:#ff5c5c; }
 * { box-sizing: border-box; }
+[hidden] { display:none !important; }
 html, body { margin:0; height:100%; background:var(--bg); color:var(--text);
   font:13px/1.55 "Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif; }
 button, select, input { font:inherit; color:inherit; }
@@ -64,6 +69,7 @@ button.primary.stop { background:var(--rec); border-color:var(--rec); }
     <span class="title">강의 요약</span>
     <span id="timer" class="timer">00:00</span>
     <div class="spacer"></div>
+    <button id="btnInstall" class="icon" title="이 위젯을 앱으로 설치 (시작 메뉴 · 작업 표시줄)" hidden>⬇ 앱 설치</button>
     <button id="btnPip" class="icon" title="항상 위에 뜨는 작은 창으로 띄우기">⧉ 띄우기</button>
     <button id="btnSettings" class="icon" title="설정">⚙</button>
   </header>
@@ -532,6 +538,24 @@ window.lectureWidget = { S, transcribe, summarize }; // 디버깅용
 S.transcript.forEach(addLine);
 showSummary(S.summary);
 if (!navigator.mediaDevices?.getDisplayMedia) status('Chrome 또는 Edge(PC) 최신 버전에서 열어 주세요.', true);
+</script>
+<script>
+// 앱 설치(PWA): 서비스 워커 등록 + 브라우저가 설치 가능하다고 알려 주면 "⬇ 앱 설치" 버튼을 보여 줌
+if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+(() => {
+  const btn = document.getElementById('btnInstall');
+  let ask = null;
+  addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); ask = e; btn.hidden = false; });
+  btn.addEventListener('click', async () => {
+    if (!ask) return;
+    ask.prompt();
+    await ask.userChoice.catch(() => {});
+    ask = null; btn.hidden = true;
+  });
+  addEventListener('appinstalled', () => { btn.hidden = true; });
+})();
 </script>
 </body>
 </html>
