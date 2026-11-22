@@ -1,10 +1,16 @@
 # 강의 요약 위젯 (LectureWidget)
 
-## ⬇ 다운로드
-- **웹 버전 (설치 없음)**: https://sykblue.github.io/lecture-widget/
-- **데스크톱 앱 (Windows exe · Mac)**: https://github.com/sykblue/lecture-widget/releases/latest
-  - Windows 설치형 `LectureWidget-*-win-x64.exe` / 무설치 `LectureWidget-*-portable.exe`
-  - 처음 실행 때 "PC 보호" 창이 뜨면 **추가 정보 → 실행** (코드 서명 없는 개인 프로젝트)
+## ▶ 바로 써 보기 — 웹 버전 (추천)
+**https://sykblue.github.io/lecture-widget/**
+설치 없이 Chrome · Edge 에서 바로 실행됩니다. Windows 스마트 앱 컨트롤 · 백신 경고와 상관없이 동작해요.
+
+### 데스크톱 앱 (선택 · 서명 없음)
+https://github.com/sykblue/lecture-widget/releases/latest
+- Windows 설치형 `LectureWidget-*-win-x64.exe` / 무설치 `LectureWidget-*-portable.exe` / Mac `*.dmg`
+- 코드 서명 인증서가 없는 개인 프로젝트라 경고가 뜰 수 있습니다.
+  - "PC 보호"(SmartScreen) 창 → **추가 정보 → 실행**
+  - **스마트 앱 컨트롤**이 켜진 Windows 11 에서는 실행이 막힙니다 → **웹 버전을 쓰세요** (스마트 앱 컨트롤을 끄는 것은 권하지 않습니다)
+  - Mac → **우클릭 → 열기**
 
 ## 🌐 웹 버전 (설치 없음) — `index.html`
 파일 하나짜리 웹페이지입니다. **Chrome 또는 Edge (PC, Windows·Mac 모두)** 에서 열면 됩니다.

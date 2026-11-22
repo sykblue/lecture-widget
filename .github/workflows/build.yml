@@ -64,11 +64,16 @@ jobs:
           files: out/*
           generate_release_notes: true
           body: |
-            ## 다운로드
-            - **Windows 설치형**: `LectureWidget-*-win-x64.exe`
-            - **Windows 무설치**: `LectureWidget-*-portable.exe` — 받아서 바로 실행
+            ## ▶ 먼저 웹 버전을 써 보세요 (설치 없음 · 추천)
+            **https://sykblue.github.io/lecture-widget/** — Chrome · Edge 에서 바로 실행, 보안 경고 없음
+
+            ## 데스크톱 앱 (선택 · 코드 서명 없음)
+            - **Windows 설치형**: `LectureWidget-*-win-x64.exe` / **무설치**: `LectureWidget-*-portable.exe`
             - **Mac (Apple 칩 M1~)**: `*-mac-arm64.dmg` / **Mac (인텔)**: `*-mac-x64.dmg`
 
-            처음 실행할 때 Windows "PC 보호" 창이 뜨면 **추가 정보 → 실행** (코드 서명 인증서가 없는 개인 프로젝트라 뜨는 안내입니다).
-            Mac 은 **우클릭 → 열기** 로 한 번 열어 주세요.
-            요약에는 [Ollama](https://ollama.com) 가 필요합니다 (README 참고).
+            서명 인증서가 없는 개인 프로젝트라 경고가 뜰 수 있습니다.
+            - Windows "PC 보호" 창 → **추가 정보 → 실행**
+            - Windows 11 **스마트 앱 컨트롤**이 켜져 있으면 실행이 막힙니다 → 웹 버전을 쓰세요
+            - Mac → **우클릭 → 열기**
+
+            요약에는 브라우저 안 LLM(WebLLM) 또는 [Ollama](https://ollama.com) 가 필요합니다 (README 참고).
