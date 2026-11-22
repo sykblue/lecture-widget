@@ -204,9 +204,10 @@ footer { display:flex; align-items:center; gap:6px; padding:6px 12px 14px; flex:
       </div>
       <label>받아쓰기 모델 (Whisper, 브라우저 안에서 실행)
         <select id="sWhisper">
-          <option value="Xenova/whisper-base">base · 빠름 (~80MB)</option>
-          <option value="Xenova/whisper-small">small · 균형 (기본, ~250MB)</option>
-          <option value="onnx-community/whisper-large-v3-turbo">large-v3-turbo · 가장 정확, GPU 권장 (~1GB)</option>
+          <option value="auto">자동 · 추천 (GPU면 large-v3-turbo, 아니면 base)</option>
+          <option value="onnx-community/whisper-large-v3-turbo">large-v3-turbo · 가장 정확 · GPU에서 가장 빠름 (~1GB)</option>
+          <option value="Xenova/whisper-small">small · 중간 (~250MB)</option>
+          <option value="Xenova/whisper-base">base · 가벼움, GPU 없을 때 (~80MB)</option>
         </select>
       </label>
       <div class="row">
@@ -240,11 +241,16 @@ const store = {
 const DEFAULTS = {
   engine: 'webllm', webllmModel: 'Qwen2.5-3B-Instruct',
   ollamaUrl: 'http://127.0.0.1:11434', ollamaModel: 'qwen2.5:14b',
-  whisperModel: 'Xenova/whisper-small', chunkSeconds: 30, summaryMinutes: 3,
+  whisperModel: 'auto', chunkSeconds: 30, summaryMinutes: 3,
   autoPip: true, // ▶ 시작하면 항상 위 작은 창으로 자동으로 띄우기 (기본 켜짐)
 };
 const S = {
-  settings: { ...DEFAULTS, ...store.get('settings', {}) },
+  settings: (() => {
+    const saved = store.get('settings', {});
+    // v2: 받아쓰기 모델 기본값이 small → 자동(GPU면 turbo). 예전 기본값을 그대로 저장해 둔 경우만 자동으로 바꾼다
+    if (!saved.v2 && saved.whisperModel === 'Xenova/whisper-small') saved.whisperModel = 'auto';
+    return { ...DEFAULTS, ...saved, v2: true };
+  })(),
   transcript: store.get('transcript', []),
   summary: store.get('summary', ''),
   summarizedUpTo: store.get('summarizedUpTo', 0),
@@ -297,15 +303,21 @@ async function asrCore(post, libUrl) {
   async function load(model) {
     if (asr && loaded === model) return;
     const progress = (p) => { if (p.status === 'progress' && p.total) post({ type: 'loading', pct: Math.round(p.loaded / p.total * 100) }); };
-    let gpu = false, device = 'CPU';
-    try { gpu = !!(navigator.gpu && await navigator.gpu.requestAdapter()); } catch {}
+    let adapter = null, device = 'CPU';
+    try { adapter = navigator.gpu ? await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }) : null; } catch {}
+    const f16 = !!(adapter && adapter.features.has('shader-f16'));
+    // 자동: GPU(fp16 가능)면 large-v3-turbo — 디코더가 얇아 GPU에서 small보다 5배 빠르고 더 정확 (40초 음성 4.5초 vs 25초, RTX 4070 실측)
+    let pick = model === 'auto' ? (adapter ? (f16 ? 'onnx-community/whisper-large-v3-turbo' : 'Xenova/whisper-small') : 'Xenova/whisper-base') : model;
     try {
-      if (!gpu) throw 0;
-      asr = await pipeline('automatic-speech-recognition', model, { device: 'webgpu', dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' }, progress_callback: progress });
+      if (!adapter) throw 0;
+      const dtype = f16 ? { encoder_model: 'fp16', decoder_model_merged: 'q4f16' } : { encoder_model: 'fp32', decoder_model_merged: 'q4' };
+      asr = await pipeline('automatic-speech-recognition', pick, { device: 'webgpu', dtype, progress_callback: progress });
       device = 'GPU';
     } catch {
-      asr = await pipeline('automatic-speech-recognition', model, { device: 'wasm', dtype: 'q8', progress_callback: progress });
+      if (pick.includes('large-v3-turbo')) pick = 'Xenova/whisper-base'; // CPU에서 turbo는 너무 느림
+      asr = await pipeline('automatic-speech-recognition', pick, { device: 'wasm', dtype: 'q8', progress_callback: progress });
     }
+    device += ' · ' + (pick.split('/')[1] || pick).replace('whisper-', '');
     loaded = model;
     post({ type: 'ready', device });
   }
@@ -384,7 +396,7 @@ function flushChunk() {
       const took = (performance.now() - t0) / 1000;
       if (text) { const item = { t, text }; S.transcript.push(item); addLine(item); persist(); }
       if (took > (+S.settings.chunkSeconds || 30) * 0.9 && S.settings.whisperModel !== 'Xenova/whisper-base') {
-        status(`받아쓰기가 느려요 (${Math.round(took)}초). ⚙ 설정에서 Whisper를 base로 낮추면 밀리지 않아요.`, true);
+        status(`받아쓰기가 느려요 (${Math.round(took)}초). GPU가 없으면 ⚙ 설정에서 받아쓰기 모델을 base로 바꿔 주세요.`, true);
       } else if (S.running) status(`듣는 중${sttDevice ? ' · ' + sttDevice : ''} · 받아쓴 조각 ${S.transcript.length}개`);
     } catch (e) { status('받아쓰기 실패: ' + e.message, true); }
   });
@@ -560,7 +572,7 @@ el.sSave.onclick = () => {
     whisperModel: el.sWhisper.value,
     chunkSeconds: Math.min(120, Math.max(10, +el.sChunk.value || 30)),
     summaryMinutes: Math.min(30, Math.max(1, +el.sEvery.value || 3)),
-    autoPip: el.sAutoPip.checked,
+    autoPip: el.sAutoPip.checked, v2: true,
   };
   store.set('settings', S.settings);
   el.settings.classList.add('hidden');
