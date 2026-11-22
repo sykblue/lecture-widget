@@ -1,15 +1,15 @@
 {
   "name": "lecture-widget",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "ZEP 강의에서 강사님 말씀을 받아 적고 요약해 주는 데스크톱 위젯",
   "main": "src/main.js",
   "author": "aicamp",
   "license": "MIT",
   "scripts": {
     "start": "electron .",
-    "dist:win": "electron-builder --win --x64",
-    "dist:mac-arm": "electron-builder --mac --arm64",
-    "dist:mac-intel": "electron-builder --mac --x64"
+    "dist:win": "electron-builder --win --x64 --publish never",
+    "dist:mac-arm": "electron-builder --mac --arm64 --publish never",
+    "dist:mac-intel": "electron-builder --mac --x64 --publish never"
   },
   "devDependencies": {
     "electron": "^45.2.3",
