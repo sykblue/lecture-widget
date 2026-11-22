@@ -1,7 +1,7 @@
 {
   "name": "강의 요약 위젯",
   "short_name": "강의 요약",
-  "description": "ZEP 강의 소리를 받아 적고 몇 분마다 요약하는 위젯 (설치 없음 · API 키 없이 로컬)",
+  "description": "ZEP 강의 · YouTube 영상 소리를 받아 적고 몇 분마다 요약하는 위젯 (설치 없음 · API 키 없이 로컬)",
   "lang": "ko",
   "id": "./",
   "start_url": "./",

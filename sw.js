@@ -1,7 +1,7 @@
 // 강의 요약 위젯 서비스 워커 — 앱 설치(PWA) + 화면 파일 오프라인 캐시
 // 화면(index.html)은 "네트워크 먼저, 실패하면 캐시". 다른 사이트(모델 · CDN) 요청은 건드리지 않습니다
 // (Whisper · WebLLM 모델은 라이브러리가 브라우저 저장소에 따로 보관합니다).
-const CACHE = 'lw-shell-v5';
+const CACHE = 'lw-shell-v6';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './pwa/icon-192.png', './pwa/icon-512.png'];
 
 self.addEventListener('install', (e) => {

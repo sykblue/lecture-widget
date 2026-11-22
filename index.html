@@ -85,7 +85,10 @@ button, select, input { font:inherit; color:inherit; }
 .steps { list-style:none; padding:0; margin:16px 0 0; text-align:left; display:grid; gap:8px; }
 .steps li { display:flex; gap:10px; align-items:flex-start; background:var(--md-surface-c); border-radius:16px; padding:10px 12px; margin:0; }
 .steps .n { flex:none; width:22px; height:22px; border-radius:11px; display:grid; place-items:center; font-size:12px; font-weight:700; background:var(--md-secondary-container); color:var(--md-on-secondary-container); }
-.empty .note { font-size:12px; margin-top:12px; }
+.empty .note { font-size:12px; margin-top:12px; line-height:1.6; }
+.srcs { display:flex; flex-wrap:wrap; justify-content:center; gap:6px; margin-top:12px; }
+.src { display:inline-flex; align-items:center; gap:4px; height:28px; padding:0 10px 0 8px; border-radius:8px; border:1px solid var(--md-outline-variant); font-size:12px; color:var(--md-on-surface-variant); }
+.src .ms { font-size:16px; }
 .line { margin:0 0 8px; padding:8px 12px; background:var(--md-surface-c); border-radius:14px; }
 .t { display:block; color:var(--md-primary); font-size:11px; font-weight:600; margin-bottom:2px; font-variant-numeric:tabular-nums; }
 
@@ -153,11 +156,12 @@ footer { display:flex; align-items:center; gap:6px; padding:6px 12px 14px; flex:
         <h4>강의를 들으면서 요약해 드려요</h4>
         <div>받아쓰기 · 요약 모두 이 컴퓨터 안에서만 처리돼요</div>
         <ol class="steps">
-          <li><span class="n">1</span><span>다른 탭에서 <b>ZEP 강의실</b>을 열고 소리가 나오게 둬요.</span></li>
-          <li><span class="n">2</span><span><b>시작</b> → 공유 창에서 ZEP 탭 선택 → <b>탭 오디오도 공유</b> 켜기.</span></li>
+          <li><span class="n">1</span><span>다른 탭에서 <b>ZEP 강의실</b>이나 <b>YouTube 영상</b>을 열고 소리가 나오게 둬요.</span></li>
+          <li><span class="n">2</span><span><b>시작</b> → 공유 창 <b>탭</b>에서 그 탭 선택 → <b>탭 오디오도 공유</b> 켜기.</span></li>
           <li><span class="n">3</span><span>공유하면 <b>항상 위 작은 창</b>으로 자동으로 바뀌어요.</span></li>
         </ol>
-        <div class="note">처음 한 번은 모델을 내려받느라 시간이 걸려요 (이후엔 저장됨)</div>
+        <div class="srcs"><span class="src"><span class="ms">groups</span>ZEP</span><span class="src"><span class="ms">smart_display</span>YouTube</span><span class="src"><span class="ms">tab</span>아무 탭</span><span class="src"><span class="ms">desktop_windows</span>다른 앱</span></div>
+        <div class="note">다른 브라우저나 앱(ZEP 앱 등)의 소리는 공유 창에서 <b>전체 화면</b> → <b>시스템 오디오 공유</b>를 켜세요.<br>처음 한 번은 모델을 내려받느라 시간이 걸려요 (이후엔 저장됨)</div>
       </div>
     </div>
   </section>
@@ -407,7 +411,7 @@ function flushChunk() {
       if (text) { const item = { t, text }; S.transcript.push(item); addLine(item); persist(); }
       if (took > (+S.settings.chunkSeconds || 30) * 0.9 && S.settings.whisperModel !== 'Xenova/whisper-base') {
         status(`받아쓰기가 느려요 (${Math.round(took)}초). GPU가 없으면 ⚙ 설정에서 받아쓰기 모델을 base로 바꿔 주세요.`, true);
-      } else if (S.running) status(`듣는 중${sttDevice ? ' · ' + sttDevice : ''} · 받아쓴 조각 ${S.transcript.length}개`);
+      } else if (S.running) status(`${S.source || ''} 듣는 중${sttDevice ? ' · ' + sttDevice : ''} · 받아쓴 조각 ${S.transcript.length}개`.trim());
     } catch (e) { status('받아쓰기 실패: ' + e.message, true); }
   });
 }
@@ -418,19 +422,27 @@ async function start() {
     video: { width: 320, height: 180, frameRate: 1 },
     audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, suppressLocalAudioPlayback: false },
     preferCurrentTab: false, selfBrowserSurface: 'exclude', systemAudio: 'include',
+    surfaceSwitching: 'include', monitorTypeSurfaces: 'include',
   });
   const autoPip = S.settings.autoPip !== false && !pipWin ? openPip().then(() => true, () => false) : Promise.resolve(false);
   try {
     S.stream = await asking;
   } catch {
     if (await autoPip) pipWin?.close();
-    return status('공유가 취소됐어요. 시작을 다시 눌러 ZEP 탭을 골라 주세요.', true);
+    return status('공유가 취소됐어요. 시작을 다시 눌러 ZEP · YouTube 탭을 골라 주세요.', true);
   }
   const tracks = S.stream.getAudioTracks();
+  const surface = S.stream.getVideoTracks()[0]?.getSettings().displaySurface || '';
   if (!tracks.length) {
     S.stream.getTracks().forEach((t) => t.stop());
-    return status('소리가 공유되지 않았어요. 공유 창에서 "탭 오디오도 공유"를 켜 주세요.', true);
+    if (await autoPip) pipWin?.close();
+    return status(surface === 'window'
+      ? '창 하나는 소리를 함께 공유할 수 없어요. "탭"(ZEP · YouTube)이나 "전체 화면 + 시스템 오디오"를 골라 주세요.'
+      : surface === 'monitor'
+        ? '소리가 공유되지 않았어요. 공유 창 아래 "시스템 오디오도 공유"를 켜 주세요.'
+        : '소리가 공유되지 않았어요. 공유 창에서 "탭 오디오도 공유"를 켜 주세요.', true);
   }
+  S.source = surface === 'monitor' ? '화면 전체 소리' : surface === 'browser' ? '탭 소리' : '소리';
   tracks[0].addEventListener('ended', () => S.running && stop());
   S.ctx = new AudioContext();
   S.inRate = S.ctx.sampleRate;
@@ -467,15 +479,15 @@ function tick() {
 }
 
 /* ---------- 요약 ---------- */
-const SYSTEM = `너는 온라인 강의(ZEP 메타버스 강의실)를 듣는 수강생을 돕는 요약 도우미다.
-입력으로 "지금까지의 요약"과 "새로 받아 적은 강사 발언"이 주어진다. 받아쓰기는 자동 음성 인식이라 오타·끊김·잡담이 섞여 있다.
+const SYSTEM = `너는 온라인 강의 · 강연 · 영상(ZEP 메타버스 강의실, YouTube 강의 · 세미나 · 튜토리얼 등)을 보는 사람을 돕는 요약 도우미다.
+입력으로 "지금까지의 요약"과 "새로 받아 적은 발표자(강사) 발언"이 주어진다. 받아쓰기는 자동 음성 인식이라 오타·끊김·잡담이 섞여 있다.
 두 내용을 합쳐 강의 전체를 반영한 최신 요약을 한국어 마크다운으로 다시 써라. 반드시 아래 형식만 출력한다.
 
 ## 한 줄 요약
 (지금까지 강의의 핵심 한 문장)
 
 ## 주요 내용
-- 주제별 불릿. 강사가 강조한 개념, 예시, 도구 이름, 명령어는 살린다.
+- 주제별 불릿. 발표자가 강조한 개념, 예시, 도구 이름, 명령어는 살린다.
 
 ## 공지 · 과제 · 할 일
 - 마감, 제출 방법, 다음 시간 준비물, 따라 해야 할 실습 단계. 없으면 "- 없음".
@@ -483,7 +495,7 @@ const SYSTEM = `너는 온라인 강의(ZEP 메타버스 강의실)를 듣는 �
 ## 키워드
 쉼표로 구분한 핵심 용어
 
-규칙: 받아쓰기에 없는 내용을 지어내지 않는다. 잡담·출석·음향 체크는 뺀다. 인식 오류로 보이는 단어는 문맥상 맞는 말로 고친다. 이전 요약의 중요한 내용은 유지한다. 반드시 한국어로만 쓴다.`;
+규칙: 받아쓰기에 없는 내용을 지어내지 않는다. 잡담 · 출석 · 음향 체크 · 영상 광고 · "구독과 좋아요" 같은 채널 홍보 · 배경 음악 가사는 뺀다. 인식 오류로 보이는 단어는 문맥상 맞는 말로 고친다. 이전 요약의 중요한 내용은 유지한다. 반드시 한국어로만 쓴다.`;
 
 let webllm = null, webllmId = '';
 async function prepareWebLLM() {
