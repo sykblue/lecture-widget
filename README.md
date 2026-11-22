@@ -4,6 +4,9 @@
 **https://sykblue.github.io/lecture-widget/**
 설치 없이 Chrome · Edge 에서 바로 실행됩니다. Windows 스마트 앱 컨트롤 · 백신 경고와 상관없이 동작해요.
 
+**앱으로 설치하기 (PWA, 추천)**: 페이지 위쪽 **⬇ 앱 설치** 버튼, 또는 주소창 오른쪽의 설치 아이콘을 누르세요.
+시작 메뉴 · 작업 표시줄에 "강의 요약 위젯"이 생기고 자기 창으로 열립니다. 브라우저가 실행하는 앱이라 **스마트 앱 컨트롤이 켜진 PC에서도 막히지 않습니다.** 지우기: 앱 창 ⋯ → 제거.
+
 ### 데스크톱 앱 (선택 · 서명 없음)
 https://github.com/sykblue/lecture-widget/releases/latest
 - Windows 설치형 `LectureWidget-*-win-x64.exe` / 무설치 `LectureWidget-*-portable.exe` / Mac `*.dmg`
