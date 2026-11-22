@@ -1,0 +1,80 @@
+{
+  "name": "lecture-widget",
+  "version": "1.0.0",
+  "description": "ZEP 강의에서 강사님 말씀을 받아 적고 요약해 주는 데스크톱 위젯",
+  "main": "src/main.js",
+  "author": "aicamp",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win --x64",
+    "dist:mac-arm": "electron-builder --mac --arm64",
+    "dist:mac-intel": "electron-builder --mac --x64"
+  },
+  "devDependencies": {
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "kr.aicamp.lecturewidget",
+    "productName": "LectureWidget",
+    "artifactName": "LectureWidget-${version}-${os}-${arch}.${ext}",
+    "asar": false,
+    "files": [
+      "src/**/*",
+      "package.json",
+      "!node_modules/onnxruntime-node/**",
+      "!node_modules/sharp/**",
+      "!node_modules/@img/**"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "portable": {
+      "artifactName": "LectureWidget-${version}-portable.exe"
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.education",
+      "identity": null,
+      "hardenedRuntime": false,
+      "extendInfo": {
+        "NSMicrophoneUsageDescription": "강의 소리를 받아 적기 위해 마이크를 사용합니다.",
+        "NSAudioCaptureUsageDescription": "ZEP 강의 소리(시스템 소리)를 받아 적기 위해 사용합니다.",
+        "NSScreenCaptureUsageDescription": "시스템 소리를 녹음하려면 화면 기록 권한이 필요합니다."
+      }
+    }
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^4.3.2"
+  }
+}

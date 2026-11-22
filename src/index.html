@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' blob: https://cdn.jsdelivr.net; worker-src 'self' blob:; connect-src 'self' https: blob: data:; style-src 'self' 'unsafe-inline'; media-src 'self' blob: mediastream:" />
+  <title>강의 요약 위젯</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header id="bar">
+    <span id="dot" class="dot" title="대기 중"></span>
+    <span class="title">강의 요약</span>
+    <span id="timer" class="timer">00:00</span>
+    <div class="spacer"></div>
+    <button id="btnPin" class="icon on" title="항상 위에 고정">📌</button>
+    <button id="btnCollapse" class="icon" title="접기/펴기">▁</button>
+    <button id="btnSettings" class="icon" title="설정">⚙</button>
+    <button id="btnClose" class="icon" title="닫기">✕</button>
+  </header>
+
+  <main id="body">
+    <nav class="tabs">
+      <button class="tab active" data-tab="summary">요약</button>
+      <button class="tab" data-tab="transcript">받아쓰기</button>
+    </nav>
+
+    <section id="summary" class="pane active">
+      <div id="summaryView" class="md"><p class="hint">▶ 시작을 누르고 ZEP 강의실 소리를 켜 두세요.<br />몇 분마다 강사님 말씀을 자동으로 요약해요.</p></div>
+    </section>
+    <section id="transcript" class="pane">
+      <div id="transcriptView"></div>
+    </section>
+
+    <div id="status" class="status"></div>
+
+    <footer>
+      <select id="source" title="소리 가져올 곳">
+        <option value="system">🔊 시스템 소리 (ZEP)</option>
+        <option value="mic">🎙 마이크</option>
+      </select>
+      <button id="btnStart" class="primary">▶ 시작</button>
+      <button id="btnNow" title="지금까지 내용 바로 요약">요약</button>
+      <button id="btnSave" title=".md 파일로 저장">저장</button>
+      <button id="btnClear" title="모두 지우기">지우기</button>
+    </footer>
+  </main>
+
+  <div id="settingsPanel" class="overlay hidden">
+    <div class="panel">
+      <h3>설정</h3>
+      <label>요약 모델 (Ollama) <a id="sRefresh" href="#" class="link">새로고침</a>
+        <select id="sModel"></select>
+      </label>
+      <label>Ollama 주소
+        <input id="sOllamaUrl" type="text" placeholder="http://127.0.0.1:11434" />
+      </label>
+      <label>받아쓰기 모델 (Whisper, 이 컴퓨터에서 실행)
+        <select id="sWhisper">
+          <option value="Xenova/whisper-base">base · 빠름, 정확도 낮음 (~80MB)</option>
+          <option value="Xenova/whisper-small">small · 균형 (기본, ~250MB)</option>
+          <option value="onnx-community/whisper-large-v3-turbo">large-v3-turbo · 가장 정확, GPU 권장 (~1GB)</option>
+        </select>
+      </label>
+      <div class="row">
+        <label>받아쓰기 단위(초)
+          <input id="sChunk" type="number" min="10" max="120" />
+        </label>
+        <label>자동 요약 간격(분)
+          <input id="sEvery" type="number" min="1" max="30" />
+        </label>
+      </div>
+      <label>투명도 <span id="opVal"></span>
+        <input id="sOpacity" type="range" min="0.4" max="1" step="0.05" />
+      </label>
+      <p class="small">모든 처리가 이 컴퓨터 안에서 이루어져요. 인터넷은 Whisper 모델을 처음 받을 때만 써요.</p>
+      <p id="macHint" class="small hidden">macOS: 처음 시작할 때 <b>시스템 설정 → 개인정보 보호 및 보안 → 화면 및 시스템 오디오 녹음</b>에서 LectureWidget을 허용한 뒤 앱을 다시 켜 주세요.</p>
+      <div class="actions">
+        <button id="sCancel">닫기</button>
+        <button id="sSave" class="primary">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>

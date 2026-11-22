@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>강의 요약 위젯</title>
+<style id="appStyle">
+:root { --bg:#14161b; --panel:#1c1f26; --line:#2a2e38; --text:#e6e8ee; --muted:#8b91a1; --accent:#6c8cff; --rec:#ff5c5c; }
+* { box-sizing: border-box; }
+html, body { margin:0; height:100%; background:var(--bg); color:var(--text);
+  font:13px/1.55 "Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif; }
+button, select, input { font:inherit; color:inherit; }
+#app { height:100vh; max-width:520px; margin:0 auto; display:flex; flex-direction:column; border-left:1px solid var(--line); border-right:1px solid var(--line); }
+.pip #app { max-width:none; border:0; }
+#bar { height:46px; flex:none; display:flex; align-items:center; gap:6px; padding:0 8px 0 12px; border-bottom:1px solid var(--line); background:var(--panel); }
+.title { font-weight:700; }
+.timer { color:var(--muted); font-variant-numeric:tabular-nums; font-size:12px; }
+.spacer { flex:1; }
+.dot { width:9px; height:9px; border-radius:50%; background:var(--muted); }
+.dot.rec { background:var(--rec); animation:pulse 1.2s infinite; }
+.dot.busy { background:var(--accent); }
+@keyframes pulse { 50% { opacity:.35; } }
+.icon { background:none; border:0; height:28px; padding:0 8px; border-radius:6px; cursor:pointer; color:var(--muted); }
+.icon:hover { background:var(--line); color:var(--text); }
+.tabs { display:flex; gap:4px; padding:8px 10px 0; flex:none; }
+.tab { flex:1; background:none; border:0; border-bottom:2px solid transparent; padding:6px; cursor:pointer; color:var(--muted); }
+.tab.active { color:var(--text); border-color:var(--accent); }
+.pane { display:none; flex:1; overflow-y:auto; padding:10px 14px; }
+.pane.active { display:block; }
+.md h2 { font-size:13px; margin:14px 0 4px; color:var(--accent); }
+.md h2:first-child { margin-top:2px; }
+.md h3 { font-size:13px; margin:10px 0 4px; }
+.md p { margin:4px 0; } .md ul, .md ol { margin:2px 0; padding-left:18px; } .md li { margin:2px 0; }
+.md code { background:var(--line); padding:0 4px; border-radius:4px; }
+.hint { color:var(--muted); margin-top:24px; }
+.hint ol { padding-left:18px; }
+.line { margin:0 0 8px; } .t { color:var(--muted); font-size:11px; margin-right:6px; }
+.status { min-height:20px; padding:2px 14px; font-size:11px; color:var(--muted); flex:none; }
+.status.err { color:var(--rec); }
+footer { display:flex; gap:6px; padding:8px 10px 10px; border-top:1px solid var(--line); flex-wrap:wrap; flex:none; }
+footer button { flex:1; }
+button, select { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:6px 8px; cursor:pointer; }
+button:hover { border-color:var(--muted); }
+button.primary { background:var(--accent); border-color:var(--accent); color:#fff; font-weight:600; }
+button.primary.stop { background:var(--rec); border-color:var(--rec); }
+#settings { position:absolute; inset:46px 0 0 0; background:rgba(0,0,0,.55); overflow-y:auto; }
+#app { position:relative; }
+.hidden { display:none !important; }
+.panel { background:var(--panel); border:1px solid var(--line); border-radius:12px; margin:12px; padding:14px; }
+.panel h3 { margin:0 0 10px; }
+.panel label { display:block; margin-bottom:10px; color:var(--muted); font-size:12px; }
+.panel input, .panel select { width:100%; margin-top:4px; background:var(--bg); border:1px solid var(--line); border-radius:8px; padding:6px 8px; color:var(--text); }
+.panel input[type=range] { padding:0; }
+.row { display:flex; gap:8px; } .row label { flex:1; }
+.small { font-size:11px; color:var(--muted); margin:6px 0; }
+.small code { background:var(--bg); padding:1px 4px; border-radius:4px; }
+.actions { display:flex; gap:8px; justify-content:flex-end; margin-top:8px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="bar">
+    <span id="dot" class="dot"></span>
+    <span class="title">강의 요약</span>
+    <span id="timer" class="timer">00:00</span>
+    <div class="spacer"></div>
+    <button id="btnPip" class="icon" title="항상 위에 뜨는 작은 창으로 띄우기">⧉ 띄우기</button>
+    <button id="btnSettings" class="icon" title="설정">⚙</button>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" data-tab="summary">요약</button>
+    <button class="tab" data-tab="transcript">받아쓰기</button>
+  </nav>
+  <section id="summary" class="pane active">
+    <div id="summaryView" class="md">
+      <div class="hint">
+        <b>사용법</b>
+        <ol>
+          <li>다른 탭에서 ZEP 강의실을 열고 소리가 나오게 둡니다.</li>
+          <li><b>▶ 시작</b> → 공유 창에서 <b>Chrome 탭</b> → ZEP 탭 선택 → <b>탭 오디오도 공유</b> 켜고 공유.</li>
+          <li><b>⧉ 띄우기</b>를 누르면 항상 위에 뜨는 작은 창이 돼요.</li>
+        </ol>
+        처음 한 번은 받아쓰기·요약 모델을 내려받느라 시간이 걸려요 (이후엔 브라우저에 저장).
+      </div>
+    </div>
+  </section>
+  <section id="transcript" class="pane"><div id="transcriptView"></div></section>
+
+  <div id="status" class="status"></div>
+  <footer>
+    <button id="btnStart" class="primary">▶ 시작</button>
+    <button id="btnNow" title="지금까지 내용 바로 요약">요약</button>
+    <button id="btnSave" title=".md 파일로 저장">저장</button>
+    <button id="btnClear" title="모두 지우기">지우기</button>
+  </footer>
+
+  <div id="settings" class="hidden">
+    <div class="panel">
+      <h3>설정</h3>
+      <label>요약 엔진
+        <select id="sEngine">
+          <option value="webllm">브라우저 안에서 (설치 없음, WebGPU 필요)</option>
+          <option value="ollama">Ollama (내 PC에 설치된 경우)</option>
+        </select>
+      </label>
+      <div id="webllmBox">
+        <label>요약 모델 (브라우저)
+          <select id="sWebllm">
+            <option value="Qwen2.5-3B-Instruct">Qwen2.5 3B · 기본 (~2GB)</option>
+            <option value="Qwen2.5-7B-Instruct">Qwen2.5 7B · 더 정확 (~5GB, 고사양)</option>
+            <option value="Qwen2.5-1.5B-Instruct">Qwen2.5 1.5B · 가벼움 (~1GB)</option>
+          </select>
+        </label>
+      </div>
+      <div id="ollamaBox">
+        <label>Ollama 주소
+          <input id="sOllamaUrl" type="text" />
+        </label>
+        <label>Ollama 모델
+          <input id="sOllamaModel" type="text" placeholder="qwen2.5:14b" list="ollamaList" />
+          <datalist id="ollamaList"></datalist>
+        </label>
+        <p class="small">웹페이지에서 Ollama를 쓰려면 한 번만 설정이 필요해요.<br>
+          Windows: <code>setx OLLAMA_ORIGINS "*"</code> 실행 후 Ollama 재시작<br>
+          Mac: <code>launchctl setenv OLLAMA_ORIGINS "*"</code> 실행 후 Ollama 재시작</p>
+      </div>
+      <label>받아쓰기 모델 (Whisper, 브라우저 안에서 실행)
+        <select id="sWhisper">
+          <option value="Xenova/whisper-base">base · 빠름 (~80MB)</option>
+          <option value="Xenova/whisper-small">small · 균형 (기본, ~250MB)</option>
+          <option value="onnx-community/whisper-large-v3-turbo">large-v3-turbo · 가장 정확, GPU 권장 (~1GB)</option>
+        </select>
+      </label>
+      <div class="row">
+        <label>받아쓰기 단위(초)<input id="sChunk" type="number" min="10" max="120" /></label>
+        <label>자동 요약 간격(분)<input id="sEvery" type="number" min="1" max="30" /></label>
+      </div>
+      <p class="small">소리와 글은 이 브라우저 밖으로 나가지 않아요. 인터넷은 모델을 처음 받을 때만 써요. Chrome 또는 Edge 최신 버전에서 쓰세요.</p>
+      <div class="actions">
+        <button id="sCancel">닫기</button>
+        <button id="sSave" class="primary">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+const TRANSFORMERS_URL = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.2/dist/transformers.min.js';
+const WEBLLM_URL = 'https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.87/+esm';
+const SAMPLE_RATE = 16000;
+
+// 요소는 처음에 잡아 둔다 (작은 창으로 옮겨도 그대로 쓰기 위해)
+const el = {};
+document.querySelectorAll('[id]').forEach((n) => (el[n.id] = n));
+
+/* ---------- 저장소 ---------- */
+const store = {
+  get(k, d) { try { const v = localStorage.getItem('lw:' + k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem('lw:' + k, JSON.stringify(v)); } catch {} },
+};
+const DEFAULTS = {
+  engine: 'webllm', webllmModel: 'Qwen2.5-3B-Instruct',
+  ollamaUrl: 'http://127.0.0.1:11434', ollamaModel: 'qwen2.5:14b',
+  whisperModel: 'Xenova/whisper-small', chunkSeconds: 30, summaryMinutes: 3,
+};
+const S = {
+  settings: { ...DEFAULTS, ...store.get('settings', {}) },
+  transcript: store.get('transcript', []),
+  summary: store.get('summary', ''),
+  summarizedUpTo: store.get('summarizedUpTo', 0),
+  running: false, summarizing: false, stream: null, ctx: null, proc: null,
+  pcm: [], pcmLen: 0, inRate: 48000, chunkAt: '', startedAt: 0, timers: [],
+  sttQueue: Promise.resolve(),
+};
+const persist = () => { store.set('transcript', S.transcript); store.set('summary', S.summary); store.set('summarizedUpTo', S.summarizedUpTo); };
+
+/* ---------- 화면 ---------- */
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, '<b>$1</b>').replace(/`([^`]+)`/g, '<code>$1</code>');
+function renderMd(md) {
+  const out = []; let list = false;
+  for (const raw of md.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').split('\n')) {
+    const line = raw.trimEnd();
+    const li = line.match(/^\s*(?:[-*]|\d+\.)\s+(.*)/);
+    if (li) { if (!list) { out.push('<ul>'); list = true; } out.push(`<li>${inline(li[1])}</li>`); continue; }
+    if (list) { out.push('</ul>'); list = false; }
+    if (/^##\s+/.test(line)) out.push(`<h2>${inline(line.replace(/^##\s+/, ''))}</h2>`);
+    else if (/^#{1,6}\s+/.test(line)) out.push(`<h3>${inline(line.replace(/^#+\s+/, ''))}</h3>`);
+    else if (line.trim()) out.push(`<p>${inline(line)}</p>`);
+  }
+  if (list) out.push('</ul>');
+  return out.join('');
+}
+const showSummary = (md) => { if (md) el.summaryView.innerHTML = renderMd(md); };
+function addLine(item) {
+  const pane = el.transcript;
+  const near = pane.scrollHeight - pane.scrollTop - pane.clientHeight < 40;
+  const d = pane.ownerDocument.createElement('div');
+  d.className = 'line';
+  d.innerHTML = `<span class="t">${item.t}</span>${esc(item.text)}`;
+  el.transcriptView.appendChild(d);
+  if (near) pane.scrollTop = pane.scrollHeight;
+}
+function status(msg, err = false) { el.status.textContent = msg || ''; el.status.classList.toggle('err', err); }
+const setDot = () => (el.dot.className = 'dot' + (S.summarizing ? ' busy' : S.running ? ' rec' : ''));
+const now = () => new Date().toTimeString().slice(0, 5);
+
+/* ---------- 받아쓰기: Whisper (웹사이트면 Web Worker, 파일로 열면 페이지 안에서) ---------- */
+// 이 함수는 워커 안에서도, 페이지 안에서도 그대로 돌아간다
+async function asrCore(post, libUrl) {
+  const { pipeline, env } = await import(libUrl);
+  env.allowLocalModels = false;
+  let asr = null, loaded = '';
+  const BAD = [/시청해\s*주셔서\s*감사/, /구독과\s*좋아요/, /MBC\s*뉴스/, /다음\s*영상에서/, /자막\s*(제공|by)/i, /^\s*(감사합니다|네|아)\.?\s*$/];
+  async function load(model) {
+    if (asr && loaded === model) return;
+    const progress = (p) => { if (p.status === 'progress' && p.total) post({ type: 'loading', pct: Math.round(p.loaded / p.total * 100) }); };
+    let gpu = false, device = 'CPU';
+    try { gpu = !!(navigator.gpu && await navigator.gpu.requestAdapter()); } catch {}
+    try {
+      if (!gpu) throw 0;
+      asr = await pipeline('automatic-speech-recognition', model, { device: 'webgpu', dtype: { encoder_model: 'fp32', decoder_model_merged: 'q4' }, progress_callback: progress });
+      device = 'GPU';
+    } catch {
+      asr = await pipeline('automatic-speech-recognition', model, { device: 'wasm', dtype: 'q8', progress_callback: progress });
+    }
+    loaded = model;
+    post({ type: 'ready', device });
+  }
+  return async (data) => {
+    try {
+      await load(data.model);
+      if (data.type !== 'transcribe') return;
+      const out = await asr(data.audio, { language: 'korean', task: 'transcribe', chunk_length_s: 30, stride_length_s: 5 });
+      let text = (Array.isArray(out) ? out.map((o) => o.text).join(' ') : out.text || '').trim();
+      if (BAD.some((re) => re.test(text))) text = '';
+      post({ type: 'result', id: data.id, text });
+    } catch (e) { post({ type: 'error', id: data.id, message: String((e && e.message) || e) }); }
+  };
+}
+
+const pending = new Map(); let reqId = 0; let sttDevice = '';
+function onSttMessage(data) {
+  if (data.type === 'loading') status(`받아쓰기 모델 내려받는 중… ${data.pct}% (처음 한 번만)`);
+  else if (data.type === 'ready') { sttDevice = data.device; status(`받아쓰기 준비 완료 (${data.device}) · 듣는 중…`); }
+  else if (data.type === 'result') { pending.get(data.id)?.resolve(data.text); pending.delete(data.id); }
+  else if (data.type === 'error') {
+    if (pending.has(data.id)) { pending.get(data.id).reject(new Error(data.message)); pending.delete(data.id); }
+    else status('받아쓰기 모델 오류: ' + data.message, true);
+  }
+}
+function failAll(msg) {
+  status(msg, true);
+  for (const p of pending.values()) p.reject(new Error(msg));
+  pending.clear();
+}
+
+let sttSend;
+if (location.protocol === 'file:') {
+  // 파일로 열면 브라우저가 워커를 막는다 → 페이지 안에서 실행
+  let handlerP = null;
+  sttSend = (data) => {
+    handlerP ||= asrCore((m) => onSttMessage(m), TRANSFORMERS_URL).catch((e) => { handlerP = null; failAll('받아쓰기 엔진을 불러오지 못했어요 (인터넷 연결 확인): ' + e.message); });
+    handlerP.then((h) => h && h(data));
+  };
+} else {
+  const src = `const h = (${asrCore.toString()})((m) => postMessage(m), ${JSON.stringify(TRANSFORMERS_URL)});\nonmessage = async (e) => (await h)(e.data);`;
+  const worker = new Worker(URL.createObjectURL(new Blob([src], { type: 'text/javascript' })), { type: 'module' });
+  worker.onmessage = (e) => onSttMessage(e.data);
+  worker.onerror = (e) => { e.preventDefault?.(); failAll('받아쓰기 엔진을 불러오지 못했어요 (인터넷 연결 확인)'); };
+  sttSend = (data, transfer) => worker.postMessage(data, transfer || []);
+}
+const transcribe = (audio) => new Promise((resolve, reject) => {
+  const id = ++reqId; pending.set(id, { resolve, reject });
+  sttSend({ type: 'transcribe', id, audio, model: S.settings.whisperModel }, [audio.buffer]);
+});
+
+/* ---------- 소리 캡처 ---------- */
+function downsample(buf, inRate) {
+  if (inRate === SAMPLE_RATE) return buf;
+  const ratio = inRate / SAMPLE_RATE, out = new Float32Array(Math.floor(buf.length / ratio));
+  for (let i = 0; i < out.length; i++) {
+    const s = Math.floor(i * ratio), e = Math.min(buf.length, Math.floor((i + 1) * ratio));
+    let sum = 0; for (let j = s; j < e; j++) sum += buf[j];
+    out[i] = sum / Math.max(1, e - s);
+  }
+  return out;
+}
+function flushChunk() {
+  if (!S.pcmLen) return;
+  const raw = new Float32Array(S.pcmLen); let off = 0;
+  for (const p of S.pcm) { raw.set(p, off); off += p.length; }
+  S.pcm = []; S.pcmLen = 0;
+  const t = S.chunkAt || now(); S.chunkAt = now();
+  const audio = downsample(raw, S.inRate);
+  let sum = 0; for (let i = 0; i < audio.length; i += 4) sum += audio[i] * audio[i];
+  if (Math.sqrt(sum / (audio.length / 4)) < 0.005 || audio.length < SAMPLE_RATE * 2) return; // 무음은 건너뜀
+  S.sttQueue = S.sttQueue.then(async () => {
+    try {
+      const t0 = performance.now();
+      const text = await transcribe(audio);
+      const took = (performance.now() - t0) / 1000;
+      if (text) { const item = { t, text }; S.transcript.push(item); addLine(item); persist(); }
+      if (took > (+S.settings.chunkSeconds || 30) * 0.9 && S.settings.whisperModel !== 'Xenova/whisper-base') {
+        status(`받아쓰기가 느려요 (${Math.round(took)}초). ⚙ 설정에서 Whisper를 base로 낮추면 밀리지 않아요.`, true);
+      } else if (S.running) status(`듣는 중${sttDevice ? ' · ' + sttDevice : ''} · 받아쓴 조각 ${S.transcript.length}개`);
+    } catch (e) { status('받아쓰기 실패: ' + e.message, true); }
+  });
+}
+
+async function start() {
+  try {
+    S.stream = await navigator.mediaDevices.getDisplayMedia({
+      video: { width: 320, height: 180, frameRate: 1 },
+      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false, suppressLocalAudioPlayback: false },
+      preferCurrentTab: false, selfBrowserSurface: 'exclude', systemAudio: 'include',
+    });
+  } catch { return status('공유가 취소됐어요. ▶ 시작을 다시 눌러 ZEP 탭을 골라 주세요.', true); }
+  const tracks = S.stream.getAudioTracks();
+  if (!tracks.length) {
+    S.stream.getTracks().forEach((t) => t.stop());
+    return status('소리가 공유되지 않았어요. 공유 창에서 "탭 오디오도 공유"를 켜 주세요.', true);
+  }
+  tracks[0].addEventListener('ended', () => S.running && stop());
+  S.ctx = new AudioContext();
+  S.inRate = S.ctx.sampleRate;
+  const src = S.ctx.createMediaStreamSource(new MediaStream(tracks));
+  const proc = S.ctx.createScriptProcessor(4096, 1, 1);
+  proc.onaudioprocess = (e) => { if (S.running) { const d = new Float32Array(e.inputBuffer.getChannelData(0)); S.pcm.push(d); S.pcmLen += d.length; } };
+  const mute = S.ctx.createGain(); mute.gain.value = 0;
+  src.connect(proc); proc.connect(mute); mute.connect(S.ctx.destination);
+  S.proc = proc;
+
+  S.running = true; S.startedAt = Date.now(); S.chunkAt = now();
+  el.btnStart.textContent = '■ 정지'; el.btnStart.classList.add('stop'); setDot();
+  status('받아쓰기 모델 준비 중…');
+  sttSend({ type: 'load', model: S.settings.whisperModel });
+  if (S.settings.engine === 'webllm') prepareWebLLM().catch(() => {});
+  S.timers.push(setInterval(tick, 1000));
+  S.timers.push(setInterval(flushChunk, (+S.settings.chunkSeconds || 30) * 1000));
+  S.timers.push(setInterval(() => summarize(false), (+S.settings.summaryMinutes || 3) * 60000));
+}
+async function stop() {
+  S.running = false;
+  S.timers.forEach(clearInterval); S.timers = [];
+  flushChunk();
+  S.proc?.disconnect(); S.stream?.getTracks().forEach((t) => t.stop()); S.ctx?.close();
+  el.btnStart.textContent = '▶ 시작'; el.btnStart.classList.remove('stop'); setDot();
+  status('정지됨 · 마지막 내용 정리 중…');
+  await S.sttQueue; await summarize(false);
+  status('정지됨');
+}
+function tick() {
+  const s = Math.floor((Date.now() - S.startedAt) / 1000), h = Math.floor(s / 3600);
+  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0'), ss = String(s % 60).padStart(2, '0');
+  el.timer.textContent = h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}
+
+/* ---------- 요약 ---------- */
+const SYSTEM = `너는 온라인 강의(ZEP 메타버스 강의실)를 듣는 수강생을 돕는 요약 도우미다.
+입력으로 "지금까지의 요약"과 "새로 받아 적은 강사 발언"이 주어진다. 받아쓰기는 자동 음성 인식이라 오타·끊김·잡담이 섞여 있다.
+두 내용을 합쳐 강의 전체를 반영한 최신 요약을 한국어 마크다운으로 다시 써라. 반드시 아래 형식만 출력한다.
+
+## 한 줄 요약
+(지금까지 강의의 핵심 한 문장)
+
+## 주요 내용
+- 주제별 불릿. 강사가 강조한 개념, 예시, 도구 이름, 명령어는 살린다.
+
+## 공지 · 과제 · 할 일
+- 마감, 제출 방법, 다음 시간 준비물, 따라 해야 할 실습 단계. 없으면 "- 없음".
+
+## 키워드
+쉼표로 구분한 핵심 용어
+
+규칙: 받아쓰기에 없는 내용을 지어내지 않는다. 잡담·출석·음향 체크는 뺀다. 인식 오류로 보이는 단어는 문맥상 맞는 말로 고친다. 이전 요약의 중요한 내용은 유지한다. 반드시 한국어로만 쓴다.`;
+
+let webllm = null, webllmId = '';
+async function prepareWebLLM() {
+  if (!navigator.gpu) throw new Error('이 브라우저는 WebGPU를 지원하지 않아요. 최신 Chrome/Edge를 쓰거나 설정에서 Ollama를 고르세요.');
+  const adapter = await navigator.gpu.requestAdapter();
+  const f16 = adapter?.features.has('shader-f16');
+  const id = `${S.settings.webllmModel}-${f16 ? 'q4f16_1' : 'q4f32_1'}-MLC`;
+  if (webllm && webllmId === id) return webllm;
+  const { CreateMLCEngine } = await import(WEBLLM_URL);
+  webllm = await CreateMLCEngine(id, {
+    initProgressCallback: (p) => { if (!S.summarizing || p.progress < 1) status(`요약 모델 준비 중… ${Math.round(p.progress * 100)}% (처음 한 번만)`); },
+  });
+  webllmId = id;
+  if (S.running) status('요약 모델 준비 완료 · 듣는 중…');
+  return webllm;
+}
+
+async function* streamSummary(messages) {
+  const st = S.settings;
+  if (st.engine === 'webllm') {
+    const engine = await prepareWebLLM();
+    const chunks = await engine.chat.completions.create({ messages, stream: true, temperature: 0.3, max_tokens: 1500 });
+    for await (const c of chunks) yield c.choices[0]?.delta?.content || '';
+    return;
+  }
+  let res;
+  try {
+    res = await fetch(st.ollamaUrl.replace(/\/+$/, '') + '/api/chat', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: st.ollamaModel, stream: true, keep_alive: '30m', options: { num_ctx: 8192, temperature: 0.3 }, messages }),
+    });
+  } catch { throw new Error('Ollama에 연결할 수 없어요. Ollama 실행 여부와 OLLAMA_ORIGINS 설정을 확인해 주세요 (⚙ 설정 참고).'); }
+  if (!res.ok) throw new Error(`Ollama 오류 (${res.status}): ${(await res.text()).slice(0, 150)}`);
+  const reader = res.body.getReader(), dec = new TextDecoder(); let buf = '';
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+      if (!line) continue;
+      const m = JSON.parse(line);
+      if (m.error) throw new Error('Ollama 오류: ' + m.error);
+      yield m.message?.content || '';
+    }
+  }
+}
+
+async function summarize(force) {
+  if (S.summarizing) return;
+  const fresh = S.transcript.slice(S.summarizedUpTo);
+  if (!fresh.length) { if (force) status('새로 받아 적은 내용이 아직 없어요.'); return; }
+  const upTo = S.transcript.length;
+  S.summarizing = true; setDot(); status('요약하는 중…');
+  const user = `<지금까지의_요약>\n${S.summary || '(아직 없음)'}\n</지금까지의_요약>\n\n<새로_받아_적은_강사_발언>\n${fresh.map((x) => `[${x.t}] ${x.text}`).join('\n')}\n</새로_받아_적은_강사_발언>`;
+  let live = '';
+  try {
+    for await (const d of streamSummary([{ role: 'system', content: SYSTEM }, { role: 'user', content: user }])) {
+      live += d; showSummary(live);
+    }
+    const result = live.replace(/<think>[\s\S]*?<\/think>/g, '').trim();
+    if (result) { S.summary = result; S.summarizedUpTo = upTo; persist(); }
+    showSummary(S.summary);
+    status(`요약 업데이트 ${now()}${S.running ? ' · 듣는 중' : ''}`);
+  } catch (e) {
+    showSummary(S.summary); status(e.message || String(e), true);
+  } finally { S.summarizing = false; setDot(); }
+}
+
+/* ---------- 설정 ---------- */
+function syncEngineBoxes() {
+  el.webllmBox.classList.toggle('hidden', el.sEngine.value !== 'webllm');
+  el.ollamaBox.classList.toggle('hidden', el.sEngine.value !== 'ollama');
+}
+async function openSettings() {
+  const s = S.settings;
+  el.sEngine.value = s.engine; el.sWebllm.value = s.webllmModel;
+  el.sOllamaUrl.value = s.ollamaUrl; el.sOllamaModel.value = s.ollamaModel;
+  el.sWhisper.value = s.whisperModel; el.sChunk.value = s.chunkSeconds; el.sEvery.value = s.summaryMinutes;
+  syncEngineBoxes();
+  el.settings.classList.remove('hidden');
+  try {
+    const r = await fetch(s.ollamaUrl.replace(/\/+$/, '') + '/api/tags');
+    const names = ((await r.json()).models || []).map((m) => m.name);
+    el.ollamaList.innerHTML = names.map((n) => `<option value="${esc(n)}">`).join('');
+  } catch {}
+}
+el.sEngine.onchange = syncEngineBoxes;
+el.sCancel.onclick = () => el.settings.classList.add('hidden');
+el.sSave.onclick = () => {
+  S.settings = {
+    engine: el.sEngine.value, webllmModel: el.sWebllm.value,
+    ollamaUrl: el.sOllamaUrl.value.trim() || DEFAULTS.ollamaUrl, ollamaModel: el.sOllamaModel.value.trim() || DEFAULTS.ollamaModel,
+    whisperModel: el.sWhisper.value,
+    chunkSeconds: Math.min(120, Math.max(10, +el.sChunk.value || 30)),
+    summaryMinutes: Math.min(30, Math.max(1, +el.sEvery.value || 3)),
+  };
+  store.set('settings', S.settings);
+  el.settings.classList.add('hidden');
+  status(S.running ? '저장됨 · 간격·모델 변경은 다시 시작하면 적용돼요.' : '설정 저장됨');
+};
+
+/* ---------- 항상 위 작은 창 (Document Picture-in-Picture) ---------- */
+let pipWin = null;
+el.btnPip.onclick = async () => {
+  if (pipWin) { pipWin.close(); return; }
+  if (!('documentPictureInPicture' in window)) return status('이 브라우저는 작은 창 띄우기를 지원하지 않아요 (Chrome/Edge 116 이상).', true);
+  pipWin = await documentPictureInPicture.requestWindow({ width: 380, height: 560 });
+  const style = pipWin.document.createElement('style');
+  style.textContent = el.appStyle.textContent;
+  pipWin.document.head.appendChild(style);
+  pipWin.document.title = '강의 요약';
+  pipWin.document.body.classList.add('pip');
+  pipWin.document.body.appendChild(el.app);
+  el.btnPip.textContent = '⧉ 되돌리기';
+  pipWin.addEventListener('pagehide', () => {
+    document.body.appendChild(el.app);
+    el.btnPip.textContent = '⧉ 띄우기';
+    pipWin = null;
+  });
+};
+
+/* ---------- 버튼 ---------- */
+el.btnStart.onclick = () => (S.running ? stop() : start());
+el.btnNow.onclick = () => summarize(true);
+el.btnSettings.onclick = () => (el.settings.classList.contains('hidden') ? openSettings() : el.settings.classList.add('hidden'));
+el.btnSave.onclick = () => {
+  const d = new Date(), stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const md = `# 강의 요약 (${stamp})\n\n${S.summary || '(요약 없음)'}\n\n---\n\n# 받아쓰기 원문\n\n${S.transcript.map((x) => `- [${x.t}] ${x.text}`).join('\n')}\n`;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([md], { type: 'text/markdown' }));
+  a.download = `강의요약_${stamp}.md`;
+  document.body.appendChild(a); a.click(); a.remove();
+  status('파일을 내려받았어요.');
+};
+el.btnClear.onclick = () => {
+  if (S.running) return status('정지한 뒤에 지울 수 있어요.', true);
+  if (!confirm('요약과 받아쓰기를 모두 지울까요?')) return;
+  S.transcript = []; S.summary = ''; S.summarizedUpTo = 0; persist();
+  el.transcriptView.innerHTML = '';
+  el.summaryView.innerHTML = '<p class="hint">지웠어요. ▶ 시작을 눌러 새로 들어 보세요.</p>';
+  el.timer.textContent = '00:00'; status('');
+};
+const tabs = [...document.querySelectorAll('.tab')], panes = [...document.querySelectorAll('.pane')];
+tabs.forEach((tab) => {
+  tab.onclick = () => {
+    tabs.forEach((t) => t.classList.toggle('active', t === tab));
+    panes.forEach((p) => p.classList.toggle('active', p.id === tab.dataset.tab));
+  };
+});
+
+/* ---------- 시작 ---------- */
+window.lectureWidget = { S, transcribe, summarize }; // 디버깅용
+S.transcript.forEach(addLine);
+showSummary(S.summary);
+if (!navigator.mediaDevices?.getDisplayMedia) status('Chrome 또는 Edge(PC) 최신 버전에서 열어 주세요.', true);
+</script>
+</body>
+</html>
