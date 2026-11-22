@@ -303,7 +303,7 @@ async function asrCore(post, libUrl) {
   const { pipeline, env } = await import(libUrl);
   env.allowLocalModels = false;
   let asr = null, loaded = '';
-  const BAD = [/시청해\s*주셔서\s*감사/, /구독과\s*좋아요/, /MBC\s*뉴스/, /다음\s*영상에서/, /자막\s*(제공|by)/i, /^\s*(감사합니다|네|아)\.?\s*$/];
+  const BAD = [/시청해\s*주셔서\s*감사/, /구독과\s*좋아요/, /MBC\s*뉴스/, /다음\s*영상에서/, /자막\s*(제공|by)/i, /^\s*(감사합니다|네|아|아멘|음|어)[\s.,!]*$/, /^[\s.,!]*(아멘[\s.,!]*)+$/];
   // 반복 환각 정리: 1~6어절 구절이 3번 이상 이어지면 1번만 남기고, 남은 글이 거의 같은 말뿐이면 버린다
   function squashRepeats(t) {
     let prev;
@@ -318,18 +318,21 @@ async function asrCore(post, libUrl) {
     let adapter = null, device = 'CPU';
     try { adapter = navigator.gpu ? await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' }) : null; } catch {}
     const f16 = !!(adapter && adapter.features.has('shader-f16'));
+    // 내장 그래픽(Intel 등)에서는 turbo가 너무 느려 받아쓰기가 밀리고 헛말이 나옴 → 외장 GPU(NVIDIA · AMD · Apple)일 때만 turbo
+    const vendor = String((adapter && adapter.info && adapter.info.vendor) || '').toLowerCase();
+    const strong = !!adapter && f16 && /nvidia|amd|apple/.test(vendor);
     // 자동: GPU(fp16 가능)면 large-v3-turbo — 디코더가 얇아 GPU에서 small보다 5배 빠르고 더 정확 (40초 음성 4.5초 vs 25초, RTX 4070 실측)
-    let pick = model === 'auto' ? (adapter ? (f16 ? 'onnx-community/whisper-large-v3-turbo' : 'Xenova/whisper-small') : 'Xenova/whisper-base') : model;
+    let pick = model === 'auto' ? (strong ? 'onnx-community/whisper-large-v3-turbo' : adapter ? 'Xenova/whisper-small' : 'Xenova/whisper-base') : model;
     try {
       if (!adapter) throw 0;
-      const dtype = f16 ? { encoder_model: 'fp16', decoder_model_merged: 'fp16' } : { encoder_model: 'fp32', decoder_model_merged: 'q4' };
+      const dtype = strong ? { encoder_model: 'fp16', decoder_model_merged: 'fp16' } : { encoder_model: 'fp32', decoder_model_merged: 'q4' };
       asr = await pipeline('automatic-speech-recognition', pick, { device: 'webgpu', dtype, progress_callback: progress });
       device = 'GPU';
     } catch {
       if (pick.includes('large-v3-turbo')) pick = 'Xenova/whisper-base'; // CPU에서 turbo는 너무 느림
       asr = await pipeline('automatic-speech-recognition', pick, { device: 'wasm', dtype: 'q8', progress_callback: progress });
     }
-    device += ' · ' + (pick.split('/')[1] || pick).replace('whisper-', '');
+    device += ' · ' + (pick.split('/')[1] || pick).replace('whisper-', '') + (adapter && device === 'GPU' ? ' · ' + (vendor || 'gpu') : '');
     loaded = model;
     post({ type: 'ready', device });
   }
